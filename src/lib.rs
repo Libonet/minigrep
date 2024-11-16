@@ -2,8 +2,10 @@ use std::fs;
 use std::error::Error;
 use std::env;
 
-pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    let contents = fs::read_to_string(config.file_path)?;
+use clap::ArgMatches;
+
+pub fn run(config: &Config) -> Result<(), Box<dyn Error>> {
+    let contents = fs::read_to_string(&config.file_path)?;
 
     let results = if config.ignore_case {
         search_case_insensitive(&config.query, &contents)
@@ -11,13 +13,53 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         search(&config.query, &contents)
     };
 
-    for line in results {
-        println!("{line}");
+    if !results.is_empty() {
+        let path = std::path::Path::new(&config.file_path);
+        let filename = path.file_name().unwrap();
+
+        println!("in the file: {}", filename.to_str().unwrap());
+        for line in results {
+            println!("  {line}");
+        }
+        println!();
+    }
+    
+    Ok(())
+}
+
+pub fn run_dir(config: &Config) -> Result<(), Box<dyn Error>> {
+    let entries = fs::read_dir(env::current_dir()?)?;
+
+    for entry in entries {
+        match entry {
+            Err(e) => eprintln!("entry error: {:?}", e),
+            Ok(entry) => {
+                let path = entry.path();
+                let md = fs::metadata(&path).unwrap();
+                if md.is_dir() {
+                    env::set_current_dir(path)?;
+                    run_dir(config)?;
+                } else {
+                    let mut new_config = config.clone();
+                    new_config.file_path = match path.to_str() {
+                        None => {
+                            eprintln!("path error");
+                            new_config.file_path
+                        }
+                        Some(str) => str.to_string(),
+                    };
+                    if !new_config.file_path.starts_with('.') {
+                        run(&new_config)?;
+                    }
+                }
+            }
+        }
     }
 
     Ok(())
 }
 
+#[derive(Clone)]
 pub struct Config {
     pub query: String,
     pub file_path: String,
@@ -26,21 +68,20 @@ pub struct Config {
 
 impl Config {
     pub fn build(
-        mut args: impl Iterator<Item = String>,
+        matches: ArgMatches,
     ) -> Result<Config, &'static str> {
-        args.next();
+        let ignore_case = matches.get_flag("ic");
 
-        let query = match args.next() {
-            Some(arg) => arg,
-            None => return Err("Didn't get a query string"),
+        let query = match matches.get_one::<String>("query") {
+            Some(arg) => arg.to_string(),
+            None => unreachable!("clap should check this"),
         };
 
-        let file_path = match args.next() {
-            Some(arg) => arg,
-            None => return Err("Didn't get a file path"),
+        // if there's no file path, search in whole directory
+        let file_path = match matches.get_one::<String>("path") {
+            Some(arg) => arg.to_string(),
+            None => unreachable!("default value is '.'"),
         };
-
-        let ignore_case = env::var("IGNORE_CASE").is_ok();
 
         Ok(Config { 
             query,
