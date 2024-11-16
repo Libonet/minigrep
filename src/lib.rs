@@ -63,6 +63,7 @@ pub fn run(config: &Config) -> Result<(), Box<dyn Error>> {
 }
 
 pub fn run_dir(config: &Config) -> Result<(), Box<dyn Error>> {
+    env::set_current_dir(&config.file_path)?;
     let entries = fs::read_dir(env::current_dir()?)?;
 
     let pool = thread_pool::ThreadPool::new(4);

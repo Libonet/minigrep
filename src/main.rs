@@ -37,7 +37,8 @@ fn main() {
         }
     };
 
-    let ret = if config.file_path == "." {
+    let md = std::fs::metadata(&config.file_path).unwrap();
+    let ret = if md.is_dir() {
         minigrep::run_dir(&config)
     } else {
         minigrep::run(&config)
