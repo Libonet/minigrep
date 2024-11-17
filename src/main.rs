@@ -4,7 +4,10 @@ use std::process;
 use clap::crate_version;
 use clap::{Arg, Command};
 
-use minigrep::Config;
+use minigrep::{
+    Config,
+    thread_pool::ThreadPool,
+};
 
 fn main() {
     let cmd = Command::new("minigrep")
@@ -15,6 +18,12 @@ fn main() {
             .short('i')
             .long("ignore_case")
             .help("Searches for any match ignoring case")
+            .action(clap::ArgAction::SetTrue)
+        )
+        .arg(
+            Arg::new("hidden_files")
+            .long("hidden")
+            .help("Looks in hidden files and directories")
             .action(clap::ArgAction::SetTrue)
         )
         .arg(
@@ -46,8 +55,10 @@ fn main() {
         }
     };
 
+    let pool = ThreadPool::new(4);
+
     let ret = if md.is_dir() {
-        minigrep::run_dir(&config)
+        minigrep::run_dir(&config, &pool)
     } else {
         minigrep::run(&config)
     };

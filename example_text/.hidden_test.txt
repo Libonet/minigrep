@@ -1,0 +1,3 @@
+testing a hidden file
+frog? Yes, hidden frog
+a frog that was hidden in a file

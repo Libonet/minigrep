@@ -53,7 +53,7 @@ impl Drop for ThreadPool {
 
         for worker in &mut self.workers {
             if let Some(thread) = worker.thread.take() {
-                thread.join().unwrap();
+                thread.join().unwrap_or(());
             }
         }
     }

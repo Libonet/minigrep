@@ -9,3 +9,4 @@ repository = "https://github.com/Libonet/minigrep"
 
 [dependencies]
 clap = { version = "4.5.21", features = ["derive", "cargo"] }
+colored = "2.1.0"
