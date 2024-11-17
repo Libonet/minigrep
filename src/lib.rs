@@ -10,6 +10,7 @@ mod thread_pool;
 pub struct Config {
     pub query: String,
     pub file_path: String,
+    pub original_path: String,
     pub ignore_case: bool,
 }
 
@@ -33,6 +34,7 @@ impl Config {
         Ok(Config { 
             query,
             file_path,
+            original_path: env::current_dir().unwrap().to_str().unwrap().to_string(),
             ignore_case
         })
     }
@@ -49,11 +51,11 @@ pub fn run(config: &Config) -> Result<(), Box<dyn Error>> {
 
     if !results.is_empty() {
         let path = std::path::Path::new(&config.file_path);
-        let filename = path.file_name().unwrap();
+        let filename = path.to_str().unwrap().strip_prefix(&config.original_path);
 
-        let mut output = format!("in the file: {}\n", filename.to_str().unwrap());
-        for line in results {
-            output.push_str(&format!("  {line}\n"));
+        let mut output = format!("in the file: {}\n", filename.unwrap());
+        for (line_number, line) in results.iter().enumerate() {
+            output.push_str(&format!("  {}: {line}\n", line_number+1));
         }
 
         println!("{output}");
@@ -74,26 +76,24 @@ pub fn run_dir(config: &Config) -> Result<(), Box<dyn Error>> {
             Ok(entry) => {
                 let path = entry.path();
                 let md = fs::metadata(&path).unwrap();
+
+                let mut new_config = config.clone();
+                new_config.file_path = match path.to_str() {
+                    None => {
+                        eprintln!("path error");
+                        new_config.file_path
+                    }
+                    Some(str) => str.to_string(),
+                };
+
                 if md.is_dir() {
-                    let config_copy = config.clone();
                     pool.execute(move || {
-                        let _ = env::set_current_dir(path);
-                        let _ = run_dir(&config_copy);
+                        let _ = run_dir(&new_config);
                     });
                 } else {
-                    let mut new_config = config.clone();
-                    new_config.file_path = match path.to_str() {
-                        None => {
-                            eprintln!("path error");
-                            new_config.file_path
-                        }
-                        Some(str) => str.to_string(),
-                    };
-                    if !new_config.file_path.starts_with('.') {
-                        pool.execute(move || {
-                            let _ = run(&new_config);
-                        });
-                    }
+                    pool.execute(move || {
+                        let _ = run(&new_config);
+                    });
                 }
             }
         }

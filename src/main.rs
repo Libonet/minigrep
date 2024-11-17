@@ -37,7 +37,15 @@ fn main() {
         }
     };
 
-    let md = std::fs::metadata(&config.file_path).unwrap();
+    let md = std::fs::metadata(&config.file_path);
+    let md = match md {
+        Ok(md) => md,
+        Err(e) => {
+            eprintln!("Error obtaining metadata: {e}");
+            process::exit(2)
+        }
+    };
+
     let ret = if md.is_dir() {
         minigrep::run_dir(&config)
     } else {
@@ -46,8 +54,11 @@ fn main() {
 
     match ret {
         Ok(_) => (),
-        Err(e) if (*e).to_string() == "stream did not contain valid UTF-8" => (),
-        Err(e) => eprintln!("Application error: {e}"),
+        Err(e) => {
+            if (*e).to_string() != "stream did not contain valid UTF-8" {
+                eprintln!("Application error: {e}");
+            }
+        }
     };
 }
 
