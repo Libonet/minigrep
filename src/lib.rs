@@ -90,7 +90,7 @@ pub fn run(config: &Config) -> Result<(), Box<dyn Error>> {
 
         let mut output = format!("{}\n", filename.unwrap().purple());
         for (indices, (line_number, line)) in results.iter() {
-            output.push_str(&format!("  {: >3}: ", (line_number+1).to_string().yellow()));
+            output.push_str(&format!("{: >4}: ", (line_number+1).to_string().yellow()));
 
             let chunks = split_by_matches(line, indices.to_owned(), config.query.len());
             for str in chunks.iter() {
@@ -105,6 +105,8 @@ pub fn run(config: &Config) -> Result<(), Box<dyn Error>> {
 }
 
 /// Searches a **directory** recursively with the given configuration.
+/// 
+/// Can fail if the given path can't be accessed by [`env::set_current_dir`]
 pub fn run_dir(config: &Config, pool: &ThreadPool) -> Result<(), Box<dyn Error>> {
     env::set_current_dir(&config.file_path)?;
     let entries = fs::read_dir(env::current_dir()?)?;
@@ -216,7 +218,7 @@ pub fn search_case_insensitive<'a>(
 }
 
 /// Splits a given line by the indices of a matched query
-/// and returns the line with the matched colored red.
+/// and returns the line with the matches colored red.
 /// 
 /// # Example
 ///
