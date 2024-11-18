@@ -27,6 +27,13 @@ fn main() {
             .action(clap::ArgAction::SetTrue)
         )
         .arg(
+            Arg::new("force_git")
+            .long("force_git")
+            .short('g')
+            .help("Looks inside directories and files found in a .gitignore")
+            .action(clap::ArgAction::SetTrue)
+        )
+        .arg(
             Arg::new("query")
             .help("The string to search for matches")
             .required(true)
@@ -65,11 +72,7 @@ fn main() {
 
     match ret {
         Ok(_) => (),
-        Err(e) => {
-            if (*e).to_string() != "stream did not contain valid UTF-8" {
-                eprintln!("Application error: {e}");
-            }
-        }
+        Err(e) => eprintln!("Application error: {e}"),
     };
 }
 

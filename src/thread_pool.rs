@@ -1,8 +1,25 @@
+//! Simple implementation of a ThreadPool to make searches with multithreading
+//!
+//! ## Example usage
+//!
+//! ```rust
+//! use minigrep::thread_pool::ThreadPool;
+//!
+//! let thread_count = 4;    
+//! let pool = ThreadPool::new(thread_count);
+//!
+//! let expensive_search_function = || { /* expensive stuff!!! */ };
+//!
+//! pool.execute(expensive_search_function);
+//! ```
+
 use std::{
     sync::{mpsc, Arc, Mutex},
     thread,
 };
 
+/// Structure that handles creation of workers
+/// and communication
 pub struct ThreadPool {
     workers: Vec<Worker>,
     sender: Option<mpsc::Sender<Job>>,
@@ -37,13 +54,14 @@ impl ThreadPool {
         }
     }
 
+    /// Send a function to be handled when available.
     pub fn execute<F>(&self, function: F)
     where
         F: FnOnce() + Send + 'static,
     {
-        let job = Box::new(function);
+        let job: Job = Box::new(function);
 
-        self.sender.as_ref().unwrap().send(job).unwrap();
+        self.sender.as_ref().unwrap().send(job).unwrap_or_default();
     }
 }
 

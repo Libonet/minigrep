@@ -1,3 +1,8 @@
+//! Configuration for searching in files and directories
+//!
+//!
+#![warn(missing_docs)]
+
 use std::fs;
 use std::error::Error;
 use std::env;
@@ -8,22 +13,38 @@ use clap::ArgMatches;
 pub mod thread_pool;
 use thread_pool::ThreadPool;
 
+/// Configuration built from the matched arguments.
 #[derive(Clone)]
 pub struct Config {
+    /// String to look for
     pub query: String,
+    /// Optional file/dir to search in (by default ".")
     pub file_path: String,
+    /// Current directory when calling minigrep
     pub original_path: String,
+    /// Ignore case while looking for matches
     pub ignore_case: bool,
+    /// Search in hidden files and directories
     pub hidden_files: bool,
+    /// TODO: by default will ignore patterns on a .gitignore.
+    /// This option forces the search on these patterns
+    pub force_git: bool,
 }
 
 impl Config {
+    /// Creates a config from the matched arguments on the minigrep call.
+    ///
+    /// # Panics
+    ///
+    /// For now, the method to obtain the original_path can fail
     pub fn build(
         matches: ArgMatches,
     ) -> Result<Config, &'static str> {
         let ignore_case = matches.get_flag("ic");
 
         let hidden_files = matches.get_flag("hidden_files");
+
+        let force_git = matches.get_flag("force_git");
 
         let query = match matches.get_one::<String>("query") {
             Some(arg) => arg.to_string(),
@@ -37,15 +58,23 @@ impl Config {
         };
 
         Ok(Config { 
+            original_path: env::current_dir().unwrap().to_str().unwrap().to_string(),
             query,
             file_path,
-            original_path: env::current_dir().unwrap().to_str().unwrap().to_string(),
             ignore_case,
             hidden_files,
+            force_git,
         })
     }
 }
 
+/// Searches a **file** with the given configuration.
+///
+/// # Panics
+///
+/// The file path in [`Config`] should be a file and not a directory.
+///
+/// For searching a directory recursively you should use [`run_dir`].
 pub fn run(config: &Config) -> Result<(), Box<dyn Error>> {
     let contents = fs::read_to_string(&config.file_path)?;
 
@@ -61,7 +90,7 @@ pub fn run(config: &Config) -> Result<(), Box<dyn Error>> {
 
         let mut output = format!("{}\n", filename.unwrap().purple());
         for (indices, (line_number, line)) in results.iter() {
-            output.push_str(&format!("  {: >5}: ", (line_number+1).to_string().yellow()));
+            output.push_str(&format!("  {: >3}: ", (line_number+1).to_string().yellow()));
 
             let chunks = split_by_matches(line, indices.to_owned(), config.query.len());
             for str in chunks.iter() {
@@ -75,6 +104,7 @@ pub fn run(config: &Config) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Searches a **directory** recursively with the given configuration.
 pub fn run_dir(config: &Config, pool: &ThreadPool) -> Result<(), Box<dyn Error>> {
     env::set_current_dir(&config.file_path)?;
     let entries = fs::read_dir(env::current_dir()?)?;
@@ -114,6 +144,22 @@ pub fn run_dir(config: &Config, pool: &ThreadPool) -> Result<(), Box<dyn Error>>
     Ok(())
 }
 
+/// Search for query (case sensitive) in contents.
+///
+/// # Example
+///
+/// ```rust
+/// use minigrep::search;
+///
+/// let query = "test";
+/// let contents = "I'm testing a case sensitive query\nTHIS IS A TesTtestTest";
+///
+/// assert_eq!(
+///     vec![
+///         (vec![4], (0, "I'm testing a case sensitive query")),
+///         (vec![14], (1, "THIS IS A TesTtestTest"))],
+///     search(query, contents));
+/// ```
 pub fn search<'a>(
     query: &'a str,
     contents: &'a str)
@@ -133,6 +179,22 @@ pub fn search<'a>(
         .collect()
 }
 
+/// Search for query (case insensitive) in contents.
+///
+/// # Example
+///
+/// ```rust
+/// use minigrep::search_case_insensitive;
+///
+/// let query = "test";
+/// let contents = "I'm teSTing a case sensitestive query\nTHIS IS A TesTtestTest";
+///
+/// assert_eq!(
+///     vec![
+///         (vec![4, 24], (0, "I'm teSTing a case sensitestive query")),
+///         (vec![10,14,18], (1, "THIS IS A TesTtestTest"))],
+///     search_case_insensitive(query, contents));
+/// ```
 pub fn search_case_insensitive<'a>(
     query: &'a str,
     contents: &'a str)
@@ -153,6 +215,32 @@ pub fn search_case_insensitive<'a>(
         .collect()
 }
 
+/// Splits a given line by the indices of a matched query
+/// and returns the line with the matched colored red.
+/// 
+/// # Example
+///
+/// ```rust
+/// use colored::Colorize;
+/// use minigrep::{ split_by_matches, search_case_insensitive};
+///
+/// let query = "test";
+/// let contents = "I'm teSTing a case sensitestive query\nTHIS IS A TesTtestTest";
+///
+/// let matches = search_case_insensitive(query, contents);
+/// let mut match_iter = matches.iter();
+///
+/// let (indices, (_num, line)) = match_iter.next().unwrap().to_owned();
+/// assert_eq!(
+///     vec![
+///         "I'm ".normal(),
+///         "teST".red(),
+///         "ing a case sensi".normal(),
+///         "test".red(),
+///         "ive query".normal(),
+///     ],
+///     split_by_matches(line, indices, query.len()));
+/// ```
 pub fn split_by_matches(
     line: &str,
     indices: Vec<usize>,
