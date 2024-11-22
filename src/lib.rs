@@ -8,7 +8,10 @@ use std::error::Error;
 use std::env;
 
 use colored::{ColoredString, Colorize};
+
 use clap::ArgMatches;
+
+use git2::Repository;
 
 pub mod thread_pool;
 use thread_pool::ThreadPool;
@@ -29,6 +32,8 @@ pub struct Config {
     /// TODO: by default will ignore patterns on a .gitignore.
     /// This option forces the search on these patterns
     pub force_git: bool,
+    /// Amount of threads for searching. Default value: 6
+    pub thread_count: usize,
 }
 
 impl Config {
@@ -47,14 +52,19 @@ impl Config {
         let force_git = matches.get_flag("force_git");
 
         let query = match matches.get_one::<String>("query") {
-            Some(arg) => arg.to_string(),
+            Some(arg) => arg.to_owned(),
             None => unreachable!("clap should check this"),
         };
 
         // if there's no file path, search in whole directory
         let file_path = match matches.get_one::<String>("path") {
-            Some(arg) => arg.to_string(),
+            Some(arg) => arg.to_owned(),
             None => unreachable!("default value is '.'"),
+        };
+
+        let thread_count = match matches.get_one::<String>("thread_count") {
+            Some(arg) => arg.parse::<usize>().expect("Must be valid integer"),
+            None => unreachable!("default value is 6"),
         };
 
         Ok(Config { 
@@ -64,6 +74,7 @@ impl Config {
             ignore_case,
             hidden_files,
             force_git,
+            thread_count,
         })
     }
 }
@@ -101,6 +112,52 @@ pub fn run(config: &Config) -> Result<(), Box<dyn Error>> {
         println!("{output}");
     }
     
+    Ok(())
+}
+/// Searches a **directory** recursively with the given configuration.
+/// Respects the gitignore file if inside a git repo
+/// 
+/// Can fail if the given path can't be accessed by [`env::set_current_dir`]
+pub fn run_dir_with_git(git_repo: &Repository, config: &Config, pool: &ThreadPool) -> Result<(), Box<dyn Error>> {
+    env::set_current_dir(&config.file_path)?;
+    let entries = fs::read_dir(env::current_dir()?)?;
+
+    for entry in entries {
+        match entry {
+            Err(e) => eprintln!("entry error: {:?}", e),
+            Ok(entry) => {
+                let path = entry.path();
+                if git_repo.is_path_ignored(&path)? {
+                    continue;
+                }
+
+                let md = fs::metadata(&path)?;
+
+                let mut new_config = config.clone();
+                new_config.file_path = match path.to_str() {
+                    None => {
+                        eprintln!("path error");
+                        new_config.file_path
+                    }
+                    Some(str) => str.to_string(),
+                };
+
+                let filename = path.file_name().unwrap().to_str().unwrap();
+
+                if config.hidden_files || !filename.starts_with(".") {
+                    if md.is_dir(){
+                        run_dir_with_git(git_repo, &new_config, pool)?;
+                        env::set_current_dir("../")?;
+                    } else {
+                        pool.execute(move || {
+                            let _ = run(&new_config);
+                        });
+                    }
+                }
+            }
+        }
+    }
+
     Ok(())
 }
 

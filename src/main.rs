@@ -4,6 +4,7 @@ use std::process;
 use clap::crate_version;
 use clap::{Arg, Command};
 
+use git2::Repository;
 use minigrep::{
     Config,
     thread_pool::ThreadPool,
@@ -34,6 +35,13 @@ fn main() {
             .action(clap::ArgAction::SetTrue)
         )
         .arg(
+            Arg::new("thread_count")
+            .long("thread_count")
+            .short('t')
+            .help("Amount of threads to use. 6 is the default")
+            .default_value("6")
+        )
+        .arg(
             Arg::new("query")
             .help("The string to search for matches")
             .required(true)
@@ -62,13 +70,26 @@ fn main() {
         }
     };
 
-    let pool = ThreadPool::new(4);
+    let pool = ThreadPool::new(config.thread_count);
 
-    let ret = if md.is_dir() {
-        minigrep::run_dir(&config, &pool)
-    } else {
-        minigrep::run(&config)
-    };
+    let ret = 
+        if md.is_dir() {
+            if config.force_git{ 
+                minigrep::run_dir(&config, &pool) 
+            } else {
+                let git_repo = match Repository::open_from_env() {
+                    Ok(repo) => repo,
+                    Err(e) => {
+                        eprintln!("Error obtaining git repo: {e}");
+                        process::exit(2)
+                    }
+                };
+                minigrep::run_dir_with_git(&git_repo, &config, &pool)
+            }
+        } else {
+            minigrep::run(&config)
+        };
+
 
     match ret {
         Ok(_) => (),
