@@ -73,21 +73,19 @@ fn main() {
     let pool = ThreadPool::new(config.thread_count);
 
     let ret = 
-        if md.is_dir() {
-            if config.force_git{ 
-                minigrep::run_dir(&config, &pool) 
-            } else {
-                let git_repo = match Repository::open_from_env() {
-                    Ok(repo) => repo,
-                    Err(e) => {
-                        eprintln!("Error obtaining git repo: {e}");
-                        process::exit(2)
-                    }
-                };
-                minigrep::run_dir_with_git(&git_repo, &config, &pool)
-            }
-        } else {
+        if !md.is_dir() {
             minigrep::run(&config)
+        } else if !config.force_git{ 
+            let git_repo = match Repository::open_from_env() {
+                Ok(repo) => repo,
+                Err(e) => {
+                    eprintln!("Error obtaining git repo: {e}");
+                    process::exit(2)
+                }
+            };
+            minigrep::run_dir_with_git(&git_repo, &config, &pool)
+        } else {
+            minigrep::run_dir(&config, &pool) 
         };
 
 
