@@ -220,21 +220,21 @@ pub fn run_dir(config: &Config, pool: &ThreadPool) -> Result<(), Box<dyn Error>>
 ///     search(query, contents));
 /// ```
 pub fn search<'a>(
-    query: &'a str,
+    query: &str,
     contents: &'a str)
 -> Vec<(Vec<usize>, (usize, &'a str))>{
     contents
         .lines()
         .enumerate()
         .map(|(num, line)| {
-            let index: Vec<usize> = 
+            let index_list: Vec<usize> = 
                 line
                     .match_indices(query)
-                    .map(|(i, _v)| i)
+                    .map(|(index, _v)| index)
                     .collect();
-            (index, (num, line))
+            (index_list, (num, line))
         })
-        .filter(|(index, (_num, _line))| !index.is_empty())
+        .filter(|(index_list, _info)| !index_list.is_empty())
         .collect()
 }
 
@@ -255,22 +255,24 @@ pub fn search<'a>(
 ///     search_case_insensitive(query, contents));
 /// ```
 pub fn search_case_insensitive<'a>(
-    query: &'a str,
+    query: &str,
     contents: &'a str)
 -> Vec<(Vec<usize>, (usize, &'a str))>{
+    let query = query.to_lowercase();
+
     contents
         .lines()
         .enumerate()
         .map(|(num, line)| { 
-            let index: Vec<usize> = 
+            let index_list: Vec<usize> = 
                 line
                     .to_lowercase()
-                    .match_indices(&query.to_lowercase())
-                    .map(|(i, _v)| i)
+                    .match_indices(&query)
+                    .map(|(index, _v)| index)
                     .collect();
-            (index, (num, line))
+            (index_list, (num, line))
         })
-        .filter(|(index, (_num, _line))| !index.is_empty())
+        .filter(|(index_list, _info)| !index_list.is_empty())
         .collect()
 }
 
